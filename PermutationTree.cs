@@ -1,234 +1,247 @@
+﻿/// Written By Joel Barba, Fall 2012.
+
 using System;
 using System.Collections.Generic;
 
-public class PermutationTree<KeyType, DataType>
+public class PermutationTree<KeyType, DataType> where DataType : new()
 {
-    #region Accessors
-    public List<DataType> data
+    #region Fields
+    public readonly SortedDictionary<KeyType, PermutationTree<KeyType, DataType>> children;
+    #endregion
+
+    #region Properties
+    public KeyType[] Path { get; private set; }
+
+    public DataType data { get; private set; }
+    #endregion
+
+    #region Methods
+    public PermutationTree()
     {
-        get
-        {
-            return mData;
-        }
+        data = default(DataType);
+        children = new SortedDictionary<KeyType, PermutationTree<KeyType, DataType>>();
     }
 
-    public HashSet<KeyType> childKeys
+    public void Add(KeyType[] pKeys, DataType pData)
     {
-        get
-        {
-            return mChildKeys;
-        }
+        Add(0, pKeys, pData);
     }
-    public SortedDictionary<KeyType, PermutationTree<KeyType, DataType>> children
+
+    public void Add(int index, KeyType[] pKeys, DataType pData)
     {
-        get
+        var length = pKeys.Length;
+
+        // If there is no key path, then:
+        if (index >= pKeys.Length)
         {
-            return mChildren;
+            // Do nothing else.
+            return;
         }
+
+        KeyType key = pKeys[index];
+
+        PermutationTree<KeyType, DataType> child = null;
+
+        // Attempt to retrieve the child if there is one in the direct children. If there is no direct child, then:
+        if (!children.TryGetValue(key, out child))
+        {
+            // Create a child and add it to the direct children.
+            child = new PermutationTree<KeyType, DataType>();
+            children.Add(key, child);
+        }
+
+        // At this point, there will be a child associated with the first key.
+
+        // If there are more than one item left in the keys, then:
+        if (index != pKeys.Length - 1)
+        {
+            child.Add(index + 1, pKeys, pData);
+            return;
+        }
+
+        // Otherwise, create an data node:
+
+        // If this node is not already a data node, then:
+        if (!EqualityComparer<DataType>.Default.Equals(child.data, default(DataType)))
+        {
+            // There is a data collision! throw error!
+        }
+
+        // Add the data to the node.
+        child.Path = pKeys;
+        child.data = pData;
+    }
+
+    private T GetDataInternal<T>(int index, KeyType[] pKeys, Func<PermutationTree<KeyType, DataType>, int, KeyType[], T> recursion, Func<PermutationTree<KeyType, DataType>, T> baseCase) where T : new()
+    {
+        // If there is no key path, then:
+        if (index >= pKeys.Length)
+        {
+            // There is no list. Do nothing else.
+            return default(T);
+        }
+
+        // Otherwise, there is a key list.
+
+        foreach (KeyValuePair<KeyType, PermutationTree<KeyType, DataType>> pair in children)
+        {
+            PermutationTree<KeyType, DataType> child = pair.Value;
+
+            KeyType key = pKeys[index];
+
+            // If the child key matches the first key, then we are looking for something along this path.
+            if (pair.Key.Equals(key))
+            {
+                // Base Case: If there is only one item left in the keys, then:
+                if (index == pKeys.Length - 1)
+                {
+                    return baseCase(child);
+                }
+
+                // We need to go deeper.
+
+                // Search the child for the substring path.
+                return recursion(child, index + 1, pKeys);
+            }
+
+            // Otherwise, the child key and first key do not match. 
+
+            // Start the search over from the full sequence in the children.
+            return recursion(child, 0, pKeys);
+        }
+
+        return default(T);
+    }
+
+    #region GetData
+    public DataType GetData(KeyType[] pKeys)
+    {
+        return GetDataInternal(0, pKeys, GetDataRecursionCase, GetDataBaseCase);
+    }
+
+    private DataType GetDataBaseCase(PermutationTree<KeyType, DataType> node)
+    {
+        return node.data;
+    }
+
+    private DataType GetDataRecursionCase(PermutationTree<KeyType, DataType> node, int index, KeyType[] pKeys)
+    {
+        return node.GetDataInternal(index, pKeys, GetDataRecursionCase, GetDataBaseCase);
     }
     #endregion
 
-    #region Function Members
-    public void Add(KeyType[] pKeys, DataType pData)
-    {
-        var length = pKeys.Length;
-
-        // no keys are present, return from function.
-        if (length == 0)
-        {
-            return;
-        }
-
-        // place all keys in a unique set of child keys.
-        for (int i = 0; i < length; ++i)
-        {
-            mChildKeys.Add(pKeys[i]);
-        }
-
-        var key = pKeys[0];
-
-        // retrieve child if there is one, create a child if there is none.
-        PermutationTree<KeyType, DataType> child = null;
-        if (!mChildren.TryGetValue(key, out child))
-        {
-            child = new PermutationTree<KeyType, DataType>();
-            mChildren.Add(key, child);
-        }
-
-        // base case: create a leaf node.
-        if (length == 1)
-        {
-            // create if not already created.
-            if (child.mData == null)
-            {
-                child.mData = new List<DataType>();
-            }
-
-            child.mData.Add(pData);
-            return;
-        }
-
-        //otherwise, create internal node:
-
-        // shrink the array, since the key has been entered.
-        length--;
-        Array.ConstrainedCopy(pKeys, 1, pKeys, 0, length);
-        Array.Resize(ref pKeys, length);
-
-        child.Add(pKeys, pData);
-    }
-
-    private bool Contains(KeyType[] pKeys)
-    {
-        var result = true;
-        for (int j = 0; j < pKeys.Length; ++j)
-        {
-            result &= mChildKeys.Contains(pKeys[j]);
-        }
-
-        return result;
-    }
-	
-	public List<DataType> GetData(KeyType[] pKeys)
-    {
-        return GetData(pKeys, pKeys);
-    }
-	
-    private List<DataType> GetData(KeyType[] pKeys, KeyType[] pFullSequence)
-    {
-        var length = pKeys.Length;
-
-        if (length == 0)
-            return null;
-
-        foreach (var pair in mChildren)
-        {
-            var child = pair.Value;
-
-            // the key is directly under the node.
-            if (pair.Key.Equals(pKeys[0]))
-            {
-                if (length == 1)
-                {
-                    return child.data;
-                }
-
-                length--;
-                Array.ConstrainedCopy(pKeys, 1, pKeys, 0, length);
-                Array.Resize(ref pKeys, length);
-
-                return child.GetData(pKeys, pFullSequence);
-            }
-            // the keys are underneath the children.
-            else if (child.Contains(pFullSequence))
-            {
-                return child.GetData(pFullSequence, pFullSequence);
-            }
-        }
-
-        return null;
-    }
-
-    public List<DataType> GetDataInChildren(KeyType[] pKeys)
-    {
-        return GetDataInChildren(pKeys, pKeys);
-    }
-	
-	private List<DataType> GetDataInChildren(KeyType[] pKeys, KeyType[] pFullSequence)
-    {
-        var length = pKeys.Length;
-
-        if (length == 0)
-            return null;
-
-        var result = new List<DataType>();
-        foreach (var pair in mChildren)
-        {
-            var child = pair.Value;
-
-            // the key is directly under the node.
-            if (pair.Key.Equals(pKeys[0]))
-            {
-                // base case.
-                if (length == 1)
-                {
-                    result.AddRange(child.GetDataInChildren());
-                }
-                // we need to go deeper.
-                else
-                {
-                    length--;
-                    KeyType[] keys = new KeyType[length];
-                    Array.ConstrainedCopy(pKeys, 1, keys, 0, length);
-
-                    result.AddRange(child.GetDataInChildren(keys, pFullSequence));
-                }
-               
-            }
-            // the keys are underneath the children.
-            else if (child.Contains(pFullSequence))
-            {
-                result.AddRange(child.GetDataInChildren(pFullSequence, pFullSequence));
-            }
-        }
-
-        return result;
-    }
-	
-	public List<DataType> GetDataInChildren()
+    #region GetDataInChildren
+    public List<DataType> GetDataInChildren()
     {
         var result = new List<DataType>();
 
-        if (mData != null)
+        // If this is a leaf node, then:
+        if (!EqualityComparer<DataType>.Default.Equals(data, default(DataType)))
         {
-            result.AddRange(mData);
+            // Add the data from the leaf node to the range.
+            result.Add(data);
         }
 
-        foreach (var pair in mChildren)
+        // Iterate through all children.
+        foreach (var pair in children)
         {
+            // Get the data within the entire subtree.
             result.AddRange(pair.Value.GetDataInChildren());
         }
 
         return result;
     }
+
+    public List<DataType> GetDataInChildren(KeyType[] pKeys)
+    {
+        return GetDataInternal(0, pKeys, GetDataInChildrenRecursionCase, GetDataInChildrenBaseCase);
+    }
+
+    private List<DataType> GetDataInChildrenBaseCase(PermutationTree<KeyType, DataType> node)
+    {
+        return node.GetDataInChildren();
+    }
+
+    private List<DataType> GetDataInChildrenRecursionCase(PermutationTree<KeyType, DataType> node, int index, KeyType[] pKeys)
+    {
+        return node.GetDataInternal(index, pKeys, GetDataInChildrenRecursionCase, GetDataInChildrenBaseCase);
+    }
     #endregion
 
-    #region Data Members
-    private List<DataType> mData = null;
-    private HashSet<KeyType> mChildKeys = new HashSet<KeyType>();
-    private SortedDictionary<KeyType, PermutationTree<KeyType, DataType>> mChildren = new SortedDictionary<KeyType, PermutationTree<KeyType, DataType>>();
+    public List<KeyValuePair<KeyType[], DataType>> GetPairInChildren(KeyType[] pKeys)
+    {
+        return GetDataInternal(0, pKeys, GetPairInChildrenRecursionCase, GetPairInChildrenBaseCase);
+    }
+
+    private List<KeyValuePair<KeyType[], DataType>> GetPairInChildrenBaseCase(PermutationTree<KeyType, DataType> node)
+    {
+        var result = new List<KeyValuePair<KeyType[], DataType>>();
+
+        // If this is a leaf node, then:
+        if (!EqualityComparer<DataType>.Default.Equals(node.data, default(DataType)))
+        {
+            // Add the data from the leaf node to the range.
+            result.Add(new KeyValuePair<KeyType[], DataType>(node.Path, node.data));
+        }
+
+        // Iterate through all children.
+        foreach (var pair in node.children)
+        {
+            // Get the data within the entire subtree.
+            result.AddRange(GetPairInChildrenBaseCase(pair.Value));
+        }
+
+        return result;
+    }
+
+    private List<KeyValuePair<KeyType[], DataType>> GetPairInChildrenRecursionCase(PermutationTree<KeyType, DataType> node, int index, KeyType[] pKeys)
+    {
+        return node.GetDataInternal(index, pKeys, GetPairInChildrenRecursionCase, GetPairInChildrenBaseCase);
+    }
     #endregion
 }
 
-public class StringPermutationTree<DataType> : PermutationTree<char, DataType>
+public class StringPermutationTree<DataType> : PermutationTree<char, DataType> where DataType : new()
 {
-    #region Function Members
+    #region Methods
     public void Add(string pKeys, DataType pData, bool pCaseSensitive = false)
     {
-		if(!pCaseSensitive)
-		{
-			pKeys = pKeys.ToLower();
-		}
-		
+        if (!pCaseSensitive)
+        {
+            pKeys = pKeys.ToLower();
+        }
+
         Add(pKeys.ToCharArray(), pData);
     }
-    public List<DataType> GetData(string pKeys, bool pCaseSensitive = false)
+
+    public DataType GetData(string pKeys, bool pCaseSensitive = false)
     {
-		if(!pCaseSensitive)
-		{
-			pKeys = pKeys.ToLower();
-		}
-		
+        if (!pCaseSensitive)
+        {
+            pKeys = pKeys.ToLower();
+        }
+
         return GetData(pKeys.ToCharArray());
     }
+
     public List<DataType> GetDataInChildren(string pKeys, bool pCaseSensitive = false)
     {
-		if(!pCaseSensitive)
-		{
-			pKeys = pKeys.ToLower();
-		}
-		
+        if (!pCaseSensitive)
+        {
+            pKeys = pKeys.ToLower();
+        }
+
         return GetDataInChildren(pKeys.ToCharArray());
+    }
+
+    public List<KeyValuePair<char[], DataType>> GetPairInChildren(string pKeys, bool pCaseSensitive = false)
+    {
+        if (!pCaseSensitive)
+        {
+            pKeys = pKeys.ToLower();
+        }
+
+        return GetPairInChildren(pKeys.ToCharArray());
     }
     #endregion
 }
