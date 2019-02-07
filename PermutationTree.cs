@@ -83,31 +83,21 @@ public class PermutationTree<KeyType, DataType> where DataType : new()
 
         // Otherwise, there is a key list.
 
-        foreach (KeyValuePair<KeyType, PermutationTree<KeyType, DataType>> pair in children)
+        KeyType key = pKeys[index];
+        PermutationTree<KeyType, DataType> child = null;
+        
+        if (children.TryGetValue(key, out child))
         {
-            PermutationTree<KeyType, DataType> child = pair.Value;
-
-            KeyType key = pKeys[index];
-
-            // If the child key matches the first key, then we are looking for something along this path.
-            if (pair.Key.Equals(key))
+            // Base Case: If there is only one item left in the keys, then:
+            if (index == pKeys.Length - 1)
             {
-                // Base Case: If there is only one item left in the keys, then:
-                if (index == pKeys.Length - 1)
-                {
-                    return baseCase(child);
-                }
-
-                // We need to go deeper.
-
-                // Search the child for the substring path.
-                return recursion(child, index + 1, pKeys);
+                return baseCase(child);
             }
 
-            // Otherwise, the child key and first key do not match. 
+            // We need to go deeper.
 
-            // Start the search over from the full sequence in the children.
-            return recursion(child, 0, pKeys);
+            // Search the child for the substring path.
+            return recursion(child, index + 1, pKeys);
         }
 
         return default(T);
